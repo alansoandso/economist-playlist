@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 from __future__ import print_function
+
 import os
-from pprint import pprint as pprint
-import sys
 import re
-from mutagen.id3 import ID3, TRCK
 import shutil
+import argparse
+from itertools import count
+from mutagen.id3 import ID3, TRCK
 
 chapters = {
     'Introduction': '00',
@@ -33,8 +34,6 @@ economist_root = "/Users/alan/workspace/economist"
 
 
 def audiofile_list(directory):
-    index = 0
-    name = 1
     if not os.path.exists(directory):
         print('No such directory: {}'.format(directory))
         return
@@ -48,12 +47,12 @@ def audiofile_list(directory):
     src_dsts = []
     latest_issue = os.path.join(economist_root, latest)
     for filename in file_list:
-        for chapter in chapter_orders:
-            if chapter[name].search(filename):
+        for index, chapter in chapter_orders:
+            if chapter.search(filename):
                 source = os.path.join(directory, filename)
                 # Prepend the preferred chapter number
                 # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
-                destination = os.path.join(latest_issue, '{}{}'.format(chapter[index], filename))
+                destination = os.path.join(latest_issue, '{}{}'.format(index, filename))
                 src_dsts.append((destination, source))
 
     # Create a folder to hold only the tracks I want
@@ -61,8 +60,8 @@ def audiofile_list(directory):
         print('Creating folder: {}'.format(latest_issue))
         os.mkdir(latest_issue)
 
-    # Copy across the tracks in the preffered order and modify the track number to reflect this order
-    index = 1
+    # Copy across the tracks in the preferred order and update the track number to reflect this order
+    track = count(start=1)
     for destination, source in sorted(src_dsts):
         if not os.path.exists(destination):
             shutil.copy(source, destination)
@@ -70,23 +69,20 @@ def audiofile_list(directory):
             # print source, destination
             # Get id3 tags and set the track number
             tags = ID3(destination)
-            # print(tags["TRCK"])
-            tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(index))
+            tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(next(track)))
             tags.save(destination)
-            index += 1
 
     print('done')
 
 
 def run():
-    if len(sys.argv) == 2 and sys.argv[1].endswith(('--help', '-h')):
-        usage = "Usage: {} [-h]\n" \
-                "Reorder a directory full of economist audio files" \
-            .format(os.path.basename(sys.argv[0]))
-        print(usage)
-        sys.exit(1)
-    elif len(sys.argv) == 2:
-        audiofile_list(os.path.abspath(sys.argv[1]))
+    parser = argparse.ArgumentParser(description='Reorder a directory full of economist audio files to my playlist')
+    parser.add_argument('directory', action="store", nargs='?', help='starting directory')
+
+    args = parser.parse_args()
+
+    if args.directory:
+        audiofile_list(os.path.abspath(args.directory))
     else:
         audiofile_list(os.path.abspath('.'))
 
