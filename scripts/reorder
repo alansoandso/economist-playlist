@@ -1,3 +1,8 @@
 #! /usr/bin/env python
-from reorder import reorder
-reorder.run()
+from reorder.reorder import Economist
+
+my_playlist = Economist()
+my_playlist.get_source()
+my_playlist.find_audio_files()
+my_playlist.set_preferred_order()
+my_playlist.create()
