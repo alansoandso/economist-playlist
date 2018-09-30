@@ -1,0 +1,4 @@
+#! /usr/bin/env python
+import reorder
+
+reorder.command_line_runner()
