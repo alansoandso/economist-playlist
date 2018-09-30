@@ -1,4 +1,5 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
+import reorder
 
 install_requires = [
     'mutagen==1.41.1'
@@ -9,7 +10,6 @@ setup(name='reorder',
       description='Reorder the economist audio file into my preferred playlist',
       author='Alan So',
       author_email='alansoandso@gmail.com',
-      packages=['reorder'],
-      scripts=['scripts/reorder'],
+      scripts=['reorder', 'reorder.py'],
       install_requires=install_requires,
       )

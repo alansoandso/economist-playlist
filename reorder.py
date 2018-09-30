@@ -36,16 +36,10 @@ economist_root = "/Users/alan/workspace/economist"
 
 
 class Economist():
-    def __init__(self):
-        self.download_folder = ''
+    def __init__(self, source_folder):
+        self.download_folder = source_folder
         self.source_destination_paths = []
         self.file_list = []
-
-    def get_source(self):
-        parser = argparse.ArgumentParser(description='Re-order downloaded Economist audio files to my preferred playlist order')
-        parser.add_argument('download_folder', action="store", nargs='?', help='download folder')
-        args = parser.parse_args()
-        self.download_folder = args.download_folder if args.download_folder else os.path.abspath('.')
 
     def find_audio_files(self):
         # Look for mp3 files in the download folder
@@ -58,22 +52,23 @@ class Economist():
 
     def set_preferred_order(self):
         _, latest = os.path.split(self.download_folder)
-        latest_issue = os.path.join(economist_root, latest)
+        latest_issues = os.path.join(economist_root, latest)
+
         for filename in self.file_list:
             for index, chapter in chapter_orders:
                 if chapter.search(filename):
                     source = os.path.join(self.download_folder, filename)
                     # Prepend the preferred chapter number
                     # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
-                    destination = os.path.join(latest_issue, '{}{}'.format(index, filename))
+                    destination = os.path.join(latest_issues, '{}{}'.format(index, filename))
                     self.source_destination_paths.append((destination, source))
 
         # Create a folder to hold only the tracks I want
-        if not os.path.exists(latest_issue):
-            print('Creating folder: {}'.format(latest_issue))
-            os.mkdir(latest_issue)
+        if not os.path.exists(latest_issues) and self.source_destination_paths:
+            print('Creating folder: {}'.format(latest_issues))
+            os.mkdir(latest_issues)
 
-    def create(self):
+    def create_playlist(self):
         # Copy across the tracks in the preferred order and update the track number to reflect this order
         track = count(start=1)
         for destination, source in sorted(self.source_destination_paths):
@@ -89,10 +84,53 @@ class Economist():
                 print(destination)
         print('done')
 
-if __name__ == '__main__':
-    my_playlist = Economist()
-    my_playlist.get_source()
-    my_playlist.find_audio_files()
-    my_playlist.set_preferred_order()
-    my_playlist.create()
 
+def get_latest_issues(download_folder):
+    _, latest = os.path.split(download_folder)
+    return os.path.join(economist_root, latest)
+
+
+def set_preferred_order(latest_issues, file_list):
+    source_destination_paths = []
+    for filename in file_list:
+        for index, chapter in chapter_orders:
+            if chapter.search(filename):
+                source = os.path.join(latest_issues, filename)
+                # Prepend the preferred chapter number
+                # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
+                destination = os.path.join(latest_issues, '{}{}'.format(index, filename))
+                source_destination_paths.append((destination, source))
+
+
+def find_audio_files(self):
+    # Look for mp3 files in the download folder
+    if not os.path.exists(self.download_folder):
+        print('No such download_folder: {}'.format(self.download_folder))
+        raise FileNotFoundError
+
+    # a list of all the audio files
+    self.file_list = [filename for filename in os.listdir(self.download_folder) if filename.endswith('.mp3')]
+
+
+def get_parser():
+    parser = argparse.ArgumentParser(description='Re-order downloaded Economist audio files to my preferred playlist order')
+    parser.add_argument('download_folder', action="store", nargs='?', help='source folder of the economist latest download')
+
+    return parser
+
+
+def command_line_runner():
+    parser = get_parser()
+    args = vars(parser.parse_args())
+
+    if not args['download_folder']:
+        args['download_folder'] = os.path.abspath('.')
+
+    latest_issue = Economist(args['download_folder'])
+    latest_issue.find_audio_files()
+    latest_issue.set_preferred_order()
+    latest_issue.create_playlist()
+
+
+if __name__ == '__main__':
+    command_line_runner()
