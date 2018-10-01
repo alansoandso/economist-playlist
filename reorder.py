@@ -30,34 +30,27 @@ chapters = {
     'Essay': '16',
     'Special report': '09'
 }
-# Create a list of tuples containing preferred order 'nn' and its regex pattern
-chapter_orders = [(order, re.compile('\\d{3}\\s' + chapter + '\\s')) for chapter, order in chapters.items()]
-economist_root = "/Users/alan/workspace/economist"
+
 
 
 class Economist():
-    def __init__(self, source_folder):
-        self.download_folder = source_folder
-        self.source_destination_paths = []
-        self.file_list = []
+    def __init__(self, source, destination):
+        self.source = source
 
-    def find_audio_files(self):
-        # Look for mp3 files in the download folder
-        if not os.path.exists(self.download_folder):
-            print('No such download_folder: {}'.format(self.download_folder))
-            raise FileNotFoundError
+        _, latest = os.path.split(source)
+        self.destination = os.path.join(destination, latest)
 
-        # a list of all the audio files
-        self.file_list = [filename for filename in os.listdir(self.download_folder) if filename.endswith('.mp3')]
+        self.copy_paths = []
+        self.audio_files = []
 
     def set_preferred_order(self):
-        _, latest = os.path.split(self.download_folder)
+        _, latest = os.path.split(self.source)
         latest_issues = os.path.join(economist_root, latest)
 
-        for filename in self.file_list:
+        for filename in self.audio_files:
             for index, chapter in chapter_orders:
                 if chapter.search(filename):
-                    source = os.path.join(self.download_folder, filename)
+                    source = os.path.join(self.source, filename)
                     # Prepend the preferred chapter number
                     # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
                     destination = os.path.join(latest_issues, '{}{}'.format(index, filename))
@@ -85,51 +78,75 @@ class Economist():
         print('done')
 
 
-def get_latest_issues(download_folder):
-    _, latest = os.path.split(download_folder)
-    return os.path.join(economist_root, latest)
+def create_playlist(source, audio_files, destination, preferred_files):
+    # Copy across the tracks in the preferred order and update the track number to reflect this order
+    if not os.path.exists(destination):
+        os.mkdir(destination)
+    source_destination_paths = zip(audio_files, preferred_files)
 
+    track = count(start=1)
+    for destination, source in sorted(source_destination_paths):
+        if not os.path.exists(destination):
+            shutil.copy(source, destination)
+            print('.', end='')
+            # print source, destination
+            # Get id3 tags and set the track number
+            tags = ID3(destination)
+            tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(next(track)))
+            tags.save(destination)
+        else:
+            print(destination)
+    print('done')
 
-def set_preferred_order(latest_issues, file_list):
-    source_destination_paths = []
-    for filename in file_list:
+def set_preferred_order(audio_files):
+    # Create a list of tuples containing preferred order 'nn' and its regex pattern
+    chapter_orders = [(order, re.compile('\\d{3}\\s' + chapter + '\\s')) for chapter, order in chapters.items()]
+    preferred = []
+    for filename in audio_files:
         for index, chapter in chapter_orders:
             if chapter.search(filename):
-                source = os.path.join(latest_issues, filename)
                 # Prepend the preferred chapter number
                 # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
-                destination = os.path.join(latest_issues, '{}{}'.format(index, filename))
-                source_destination_paths.append((destination, source))
+                destination = f'{index}{filename}'
+                preferred.append(destination)
 
+    return preferred
 
-def find_audio_files(self):
-    # Look for mp3 files in the download folder
-    if not os.path.exists(self.download_folder):
-        print('No such download_folder: {}'.format(self.download_folder))
+def find_audio_files(source):
+    # Look for mp3 files in the downloads folder
+    if not os.path.exists(source):
+        print('No such originals: {}'.format(source))
         raise FileNotFoundError
 
     # a list of all the audio files
-    self.file_list = [filename for filename in os.listdir(self.download_folder) if filename.endswith('.mp3')]
-
+    return [file for file in os.listdir(source) if file.endswith('.mp3')]
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Re-order downloaded Economist audio files to my preferred playlist order')
-    parser.add_argument('download_folder', action="store", nargs='?', help='source folder of the economist latest download')
+    parser.add_argument('source', action="store", nargs='?', help='source folder of the economist latest download')
+    parser.add_argument('destination', action="store", nargs='?', help='destination folder for the playlist')
 
     return parser
-
 
 def command_line_runner():
     parser = get_parser()
     args = vars(parser.parse_args())
 
-    if not args['download_folder']:
-        args['download_folder'] = os.path.abspath('.')
+    if args['source']:
+        source = os.path.abspath(args['source'])
+    else:
+        source = os.path.abspath('.')
 
-    latest_issue = Economist(args['download_folder'])
-    latest_issue.find_audio_files()
-    latest_issue.set_preferred_order()
-    latest_issue.create_playlist()
+    _, issue = os.path.split(source)
+
+    if args['destination']:
+        destination = os.path.abspath(args['destination'])
+    else:
+        destination = os.getenv('ECONOMIST_PATH') or os.path.join(os.getenv('HOME'), 'workspace', 'economist', issue)
+
+    audio_files = find_audio_files(source)
+    preferred_files = set_preferred_order(audio_files)
+    create_playlist(source, audio_files, destination, preferred_files)
 
 
 if __name__ == '__main__':
