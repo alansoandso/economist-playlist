@@ -32,71 +32,12 @@ chapters = {
 }
 
 
+def audio_paths(source, destination, preferred_files):
+    for new, old in sorted(preferred_files):
+        src = os.path.join(source, old)
+        dest = os.path.join(destination, new)
+        yield src, dest
 
-class Economist():
-    def __init__(self, source, destination):
-        self.source = source
-
-        _, latest = os.path.split(source)
-        self.destination = os.path.join(destination, latest)
-
-        self.copy_paths = []
-        self.audio_files = []
-
-    def set_preferred_order(self):
-        _, latest = os.path.split(self.source)
-        latest_issues = os.path.join(economist_root, latest)
-
-        for filename in self.audio_files:
-            for index, chapter in chapter_orders:
-                if chapter.search(filename):
-                    source = os.path.join(self.source, filename)
-                    # Prepend the preferred chapter number
-                    # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
-                    destination = os.path.join(latest_issues, '{}{}'.format(index, filename))
-                    self.source_destination_paths.append((destination, source))
-
-        # Create a folder to hold only the tracks I want
-        if not os.path.exists(latest_issues) and self.source_destination_paths:
-            print('Creating folder: {}'.format(latest_issues))
-            os.mkdir(latest_issues)
-
-    def create_playlist(self):
-        # Copy across the tracks in the preferred order and update the track number to reflect this order
-        track = count(start=1)
-        for destination, source in sorted(self.source_destination_paths):
-            if not os.path.exists(destination):
-                shutil.copy(source, destination)
-                print('.', end='')
-                # print source, destination
-                # Get id3 tags and set the track number
-                tags = ID3(destination)
-                tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(next(track)))
-                tags.save(destination)
-            else:
-                print(destination)
-        print('done')
-
-
-def create_playlist(source, audio_files, destination, preferred_files):
-    # Copy across the tracks in the preferred order and update the track number to reflect this order
-    if not os.path.exists(destination):
-        os.mkdir(destination)
-    source_destination_paths = zip(audio_files, preferred_files)
-
-    track = count(start=1)
-    for destination, source in sorted(source_destination_paths):
-        if not os.path.exists(destination):
-            shutil.copy(source, destination)
-            print('.', end='')
-            # print source, destination
-            # Get id3 tags and set the track number
-            tags = ID3(destination)
-            tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(next(track)))
-            tags.save(destination)
-        else:
-            print(destination)
-    print('done')
 
 def set_preferred_order(audio_files):
     # Create a list of tuples containing preferred order 'nn' and its regex pattern
@@ -107,10 +48,34 @@ def set_preferred_order(audio_files):
             if chapter.search(filename):
                 # Prepend the preferred chapter number
                 # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
-                destination = f'{index}{filename}'
-                preferred.append(destination)
+                destination = '{}{}'.format(index,filename)
+                preferred.append((destination, filename))
 
     return preferred
+
+
+def create_playlist(source, destination, preferred_files):
+    return [(src, dest) for src, dest in audio_paths(source, destination, preferred_files) if not os.path.exists(dest)]
+
+
+def make_preferred(directory):
+    if not os.path.exists(directory):
+        os.mkdir(directory)
+
+
+def copy_preferred(playlist):
+    # Copy across the tracks in the preferred order and update the track number to reflect this order
+    track = count(start=1)
+    for src, dest in playlist:
+        shutil.copy(src, dest)
+        print('.', end='')
+        # Get id3 tags and set the track number
+        tags = ID3(dest)
+        tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(next(track)))
+        tags.save(dest)
+    else:
+        print('\nCopied {} files in playlist'.format(len(playlist)))
+
 
 def find_audio_files(source):
     # Look for mp3 files in the downloads folder
@@ -121,12 +86,14 @@ def find_audio_files(source):
     # a list of all the audio files
     return [file for file in os.listdir(source) if file.endswith('.mp3')]
 
+
 def get_parser():
     parser = argparse.ArgumentParser(description='Re-order downloaded Economist audio files to my preferred playlist order')
     parser.add_argument('source', action="store", nargs='?', help='source folder of the economist latest download')
     parser.add_argument('destination', action="store", nargs='?', help='destination folder for the playlist')
 
     return parser
+
 
 def command_line_runner():
     parser = get_parser()
@@ -146,8 +113,9 @@ def command_line_runner():
 
     audio_files = find_audio_files(source)
     preferred_files = set_preferred_order(audio_files)
-    create_playlist(source, audio_files, destination, preferred_files)
-
+    playlist = create_playlist(source, destination, preferred_files)
+    make_preferred(destination)
+    copy_preferred(playlist)
 
 if __name__ == '__main__':
     command_line_runner()
