@@ -3,33 +3,49 @@ import os
 import re
 import shutil
 import argparse
-from itertools import count
 
+from itertools import count
 from mutagen.id3 import ID3, TRCK
 
+# My preferred order for the chapters
+CHAPTERS = (
+    'Introduction',
+    'The world this week',
+    'Science and technology',
+    'Britain',
+    'Leaders',
+    'Briefing',
+    'International',
+    'Business',
+    'Finance and economics',
+    'Special report',
+    'Europe',
+    'United States',
+    'Asia',
+    'China',
+    'Middle East and Africa',
+    'The Americas',
+    'Essay',
+    'Books and arts',
+    'Obituary'
+)
 
-chapters = {
-    'Introduction': '00',
-    'The world this week': '01',
-    'Leaders': '04',
-    'Letters': '18',
-    'Briefing': '05',
-    'United States': '11',
-    'The Americas': '15',
-    'Asia': '12',
-    'China': '13',
-    'Middle East and Africa': '14',
-    'Europe': '10',
-    'Britain': '03',
-    'International': '06',
-    'Business': '07',
-    'Finance and economics': '08',
-    'Science and technology': '02',
-    'Books and arts': '17',
-    'Obituary': '18',
-    'Essay': '16',
-    'Special report': '09'
-}
+
+def set_preferred_order(audio_files):
+    # list of tuples: preferred order 'nn' and regex search pattern
+    # e.g. ('02', re.compile('\\d{3}\\sScience and technology\\s'))
+    re_chapters = [('{:02}'.format(order), re.compile('\\d{3}\\s' + chapter + '\\s')) for order, chapter in enumerate(CHAPTERS)]
+
+    preferred = []
+    for filename in audio_files:
+        for index, regex in re_chapters:
+            if regex.search(filename):
+                # Prepend the preferred chapter number
+                # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
+                destination = '{}{}'.format(index, filename)
+                preferred.append((destination, filename))
+
+    return preferred
 
 
 def audio_paths(source, destination, preferred_files):
@@ -37,21 +53,6 @@ def audio_paths(source, destination, preferred_files):
         src = os.path.join(source, old)
         dest = os.path.join(destination, new)
         yield src, dest
-
-
-def set_preferred_order(audio_files):
-    # Create a list of tuples containing preferred order 'nn' and its regex pattern
-    chapter_orders = [(order, re.compile('\\d{3}\\s' + chapter + '\\s')) for chapter, order in chapters.items()]
-    preferred = []
-    for filename in audio_files:
-        for index, chapter in chapter_orders:
-            if chapter.search(filename):
-                # Prepend the preferred chapter number
-                # e.g. '078 Science and technology - Recycling.mp3' to '02078 Science and technology - Recycling.mp3'
-                destination = '{}{}'.format(index,filename)
-                preferred.append((destination, filename))
-
-    return preferred
 
 
 def create_playlist(source, destination, preferred_files):
@@ -66,13 +67,13 @@ def make_preferred(directory):
 def copy_preferred(playlist):
     # Copy across the tracks in the preferred order and update the track number to reflect this order
     track = count(start=1)
-    for src, dest in playlist:
-        shutil.copy(src, dest)
+    for s, d in playlist:
+        shutil.copy(s, d)
         print('.', end='')
         # Get id3 tags and set the track number
-        tags = ID3(dest)
+        tags = ID3(d)
         tags["TRCK"] = TRCK(encoding=3, text=u'{}'.format(next(track)))
-        tags.save(dest)
+        tags.save(d)
     else:
         print('\nCopied {} files in playlist'.format(len(playlist)))
 
@@ -104,17 +105,17 @@ def command_line_runner():
     else:
         source = os.path.abspath('.')
 
-    _, issue = os.path.split(source)
-
     if args['destination']:
         destination = os.path.abspath(args['destination'])
     else:
+        _, issue = os.path.split(source)
         destination = os.getenv('ECONOMIST_PATH') or os.path.join(os.getenv('HOME'), 'workspace', 'economist', issue)
 
     audio_files = find_audio_files(source)
     preferred_files = set_preferred_order(audio_files)
     playlist = create_playlist(source, destination, preferred_files)
-    make_preferred(destination)
+    if playlist:
+        make_preferred(destination)
     copy_preferred(playlist)
 
 if __name__ == '__main__':
